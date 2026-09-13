@@ -1,0 +1,79 @@
+class output_monitor extends uvm_monitor;
+`uvm_component_utils(output_monitor)
+uvm_analysis_port#(trans) out_monitor_port;
+virtual axi4lite_if.out_mon_mp vif;
+axi4lite_config m_cfg;
+trans rd_data;
+function new(string name="output_monitor",uvm_component parent);
+super.new(name,parent);
+endfunction
+function void build_phase(uvm_phase phase);
+super.build_phase(phase);
+if(!uvm_config_db#(axi4lite_config)::get(this,"","axi4lite_config",m_cfg))
+`uvm_fatal(get_type_name(),"Output monitor Failed")
+out_monitor_port=new("out_monitor_port",this);
+endfunction
+
+function void connect_phase(uvm_phase phase);
+super.connect_phase(phase);
+vif=m_cfg.vif;
+endfunction
+
+task run_phase(uvm_phase phase);
+//repeat(2) @(vif.out_mon_cb);
+forever begin
+
+rd_data=trans::type_id::create("rd_data");
+@(vif.out_mon_cb);
+`uvm_info("OUT_DEBUG",
+$sformatf("ARV=%0b ARR=%0b RV=%0b RR=%0b BV=%0b BR=%0b",
+vif.out_mon_cb.ARVALID,
+vif.out_mon_cb.ARREADY,
+vif.out_mon_cb.RVALID,
+vif.out_mon_cb.RREADY,
+vif.out_mon_cb.BVALID,
+vif.out_mon_cb.BREADY),
+UVM_NONE)
+collect_data();
+out_monitor_port.write(rd_data);
+`uvm_info("OUTPUT_MONITOR",$sformatf("OUTPUT MONITOR\n %s",rd_data.sprint()),UVM_NONE)
+end
+endtask
+
+virtual task collect_data();
+forever begin
+@(vif.out_mon_cb);
+if ((vif.out_mon_cb.AWVALID && vif.out_mon_cb.AWREADY) && !(vif.out_mon_cb.WVALID && vif.out_mon_cb.WREADY)) begin
+wait(vif.out_mon_cb.BVALID);
+rd_data.BRESP=vif.out_mon_cb.BRESP;
+rd_data.ARESETn=vif.out_mon_cb.ARESETn;
+return;
+end
+
+else if(!(vif.out_mon_cb.AWVALID && vif.out_mon_cb.AWREADY) && (vif.out_mon_cb.WVALID && vif.out_mon_cb.WREADY)) begin
+rd_data.WDATA=vif.out_mon_cb.WDATA;
+wait(vif.out_mon_cb.BVALID);
+rd_data.BRESP=vif.out_mon_cb.BRESP;
+rd_data.ARESETn=vif.out_mon_cb.ARESETn;
+return;
+end
+
+else if((vif.out_mon_cb.AWVALID && vif.out_mon_cb.AWREADY) && (vif.out_mon_cb.WVALID && vif.out_mon_cb.WREADY)) begin
+wait(vif.out_mon_cb.BVALID);
+rd_data.BRESP=vif.out_mon_cb.BRESP;
+rd_data.ARESETn=vif.out_mon_cb.ARESETn;
+return;
+end
+
+else if(vif.out_mon_cb.ARVALID && vif.out_mon_cb.ARREADY) begin
+wait(vif.out_mon_cb.RVALID);
+rd_data.RRESP=vif.out_mon_cb.RRESP;
+rd_data.RDATA=vif.out_mon_cb.RDATA;
+rd_data.ARESETn=vif.out_mon_cb.ARESETn;
+return;
+end
+end
+endtask
+endclass
+
+
