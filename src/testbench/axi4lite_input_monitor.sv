@@ -31,7 +31,7 @@ class input_monitor extends uvm_monitor;
     virtual task collect_input_monitor();
         forever begin
             @(vif.inp_mon_cb);
-            $display("%0t MONITOR: AWVALID+%0d AWREADY=%0d",$time,vif.inp_mon_cb.AWVALID,vif.inp_mon_cb.AWREADY);
+            $display("%0t MONITOR: AWVALID=%0d AWREADY=%0d",$time,vif.inp_mon_cb.AWVALID,vif.inp_mon_cb.AWREADY);
             if ((vif.inp_mon_cb.AWVALID && vif.inp_mon_cb.AWREADY) && !(vif.inp_mon_cb.WVALID && vif.inp_mon_cb.WREADY)) begin
                 drv2mon.AWADDR=vif.inp_mon_cb.AWADDR;
                 drv2mon.AWPROT=vif.inp_mon_cb.AWPROT;
