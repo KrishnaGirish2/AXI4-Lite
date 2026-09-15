@@ -374,7 +374,7 @@ task body();
 req=trans::type_id::create("req");
 repeat(1) begin
 start_item(req);
-assert(req.randomize() with {alt==1;AWADDR==32'h30;WDATA==32'h5;WSTRB==4'b1111;write_read==1;write_order==2'd2;});
+assert(req.randomize() with {AWADDR==32'h30;WDATA==32'h5;WSTRB==4'b1111;write_read==1;write_order==2'd2;});
 finish_item(req);
 end
 endtask
@@ -390,7 +390,7 @@ task body();
 req=trans::type_id::create("req");
 repeat(1) begin
 start_item(req);
-assert(req.randomize() with {alt==1;AWADDR==32'h34;WDATA==32'h5;WSTRB==4'b1111;write_read==1;write_order==2'd2;});
+assert(req.randomize() with {AWADDR==32'h34;WDATA==32'h5;WSTRB==4'b1111;write_read==1;write_order==2'd2;});
 finish_item(req);
 end
 endtask
