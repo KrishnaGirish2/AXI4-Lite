@@ -58,7 +58,8 @@ return;
 end
 
 if(t.write_read) begin
-if(t.AWADDR[1:0]!=2'b00) exp_bresp=2'b10;
+  if(t.AWADDR>32'h3C) exp_bresp=2'b11;
+else if(t.AWADDR[1:0]!=2'b00) exp_bresp=2'b10;
 else if((t.AWADDR>=32'h00 && t.AWADDR<=32'h24) || (t.AWADDR>=32'h34 && t.AWADDR <=32'h38) || t.AWADDR==32'h3C) begin
 exp_bresp=2'b00;
 ref_mem[t.AWADDR[5:2]]=t.WDATA;
@@ -68,7 +69,8 @@ else exp_bresp=2'b11;
 end
 
 else begin
-if(t.ARADDR[1:0]!=2'b00) exp_rresp=2'b10;
+  if(t.ARADDR>32'h3C) exp_rresp=2'b11;
+else if(t.ARADDR[1:0]!=2'b00) exp_rresp=2'b10;
 else if(t.ARADDR>=32'h34 && t.ARADDR <=32'h38) exp_rresp=2'b10;
 else if((t.ARADDR>=32'h00 && t.ARADDR<=32'h24) || (t.ARADDR>=32'h28 && t.ARADDR <=32'h30) || t.ARADDR==32'h3C) begin
 exp_rresp=2'b00;
