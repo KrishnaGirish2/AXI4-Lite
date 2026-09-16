@@ -57,8 +57,8 @@ class driver extends uvm_driver#(trans);
 				end
 				2'd3: begin
  					fork
- 						drive_write_address(req);
- 						drive_write_data(req);
+						drive_write_address(req,1);
+						drive_write_data(req,1);
 					join
 				end
 				endcase
@@ -95,7 +95,7 @@ class driver extends uvm_driver#(trans);
 			seq_item_port.item_done();
 		end
 	endtask
-	task drive_write_address(trans data2duv);
+	task drive_write_address(trans data2duv, bit hold=0);
 	begin
 		@(vif.drv_cb);
 		vif.drv_cb.AWADDR<=data2duv.AWADDR;
@@ -104,12 +104,13 @@ class driver extends uvm_driver#(trans);
 		vif.drv_cb.AWVALID<=1;
 		@(vif.drv_cb)
 		while(!vif.drv_cb.AWREADY) @vif.drv_cb;
+		if(hold) @(vif.drv_cb);
 		$display("[%0t] Driver:AWREADY seen, AWVALID<=0",$time);
 		vif.drv_cb.AWVALID<=0;
 	end
 	endtask
 
-	task drive_write_data(trans data2duv);
+	task drive_write_data(trans data2duv, bit hold=0);
 	begin
 		@(vif.drv_cb);
 		vif.drv_cb.WDATA<=data2duv.WDATA;
@@ -117,6 +118,7 @@ class driver extends uvm_driver#(trans);
 		vif.drv_cb.WVALID<=1;
 		@(vif.drv_cb)
 		while(!vif.drv_cb.WREADY) @(vif.drv_cb);
+		if(hold) @(vif.drv_cb);
 		vif.drv_cb.WVALID<=0;
 	end
 	endtask
