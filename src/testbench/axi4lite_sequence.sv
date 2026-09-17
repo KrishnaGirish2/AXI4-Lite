@@ -475,6 +475,69 @@ finish_item(req);
 end
 endtask
 endclass
+class seq_29 extends uvm_sequence #(trans);
+`uvm_object_utils(seq_29)
+trans req;
+function new(string name="seq_29");
+super.new(name);
+endfunction
+task body();
+req=trans::type_id::create("req");
+begin
+start_item(req);
+assert(req.randomize() with {AWADDR==32'h24; WDATA==32'h5; WSTRB==32'b1111;write_order==2'd3;write_read==1;});
+finish_item(req);
+end
+endtask
+endclass
+
+class seq_30 extends uvm_sequence #(trans);
+`uvm_object_utils(seq_30)
+trans req;
+function new(string name="seq_30");
+super.new(name);
+endfunction
+task body();
+req=trans::type_id::create("req");
+repeat(1) begin
+start_item(req);
+assert(req.randomize() with {ARADDR==32'h24; write_read==0;});
+finish_item(req);
+end
+endtask
+endclass
+
+class seq_31 extends uvm_sequence #(trans);
+`uvm_object_utils(seq_31)
+trans req;
+function new(string name="seq_31");
+super.new(name);
+endfunction
+task body();
+req=trans::type_id::create("req");
+repeat(1) begin
+start_item(req);
+assert(req.randomize() with {write_order==3'd4;write_read==1; AWADDR==32'h3C; WDATA==32'h7; ARADDR==32'h24;});
+finish_item(req);
+end
+endtask
+endclass
+
+class seq_32 extends uvm_sequence #(trans);
+`uvm_object_utils(seq_32)
+trans req;
+function new(string name="seq_32");
+super.new(name);
+endfunction
+task body();
+req=trans::type_id::create("req");
+repeat(1) begin
+start_item(req);
+assert(req.randomize() with {write_order==3'd4;write_read==1; AWADDR==32'h3C; WDATA==32'h7; ARADDR==32'h3C;});
+finish_item(req);
+end
+endtask
+endclass
 
 
 
