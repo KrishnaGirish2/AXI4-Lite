@@ -51,7 +51,10 @@ seq_25 s25;
 seq_26 s26;
 seq_27 s27;
 seq_28 s28;
-
+seq_29 s29;
+seq_30 s30;
+seq_31 s31;
+seq_32 s32;
 function new(string name="test1",uvm_component parent);
 super.new(name,parent);
 endfunction
@@ -85,7 +88,10 @@ s25=seq_25::type_id::create("s25");
 s26=seq_26::type_id::create("s26");
 s27=seq_27::type_id::create("s27");
 s28=seq_28::type_id::create("s28");
-
+s29=seq_29::type_id::create("s29");
+s30=seq_30::type_id::create("s30");
+s31=seq_31::type_id::create("s31");
+s32=seq_32::type_id::create("s32");
 begin
 s1.start(env_h.agt_h.seqr_h);
 s2.start(env_h.agt_h.seqr_h);
@@ -115,7 +121,14 @@ s25.start(env_h.agt_h.seqr_h);
 s26.start(env_h.agt_h.seqr_h);
 s27.start(env_h.agt_h.seqr_h);
 s28.start(env_h.agt_h.seqr_h);
+s29.start(env_h.agt_h.seqr_h);
+s30.start(env_h.agt_h.seqr_h);
+//repeat(5)@(m_cfg.vif.inp_mon_cb);
+s1.start(env_h.agt_h.seqr_h);
+s31.start(env_h.agt_h.seqr_h);
+s1.start(env_h.agt_h.seqr_h);
 
+s32.start(env_h.agt_h.seqr_h);
 end
 #100;
 phase.drop_objection(this);
