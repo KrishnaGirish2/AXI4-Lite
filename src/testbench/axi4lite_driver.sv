@@ -1,181 +1,187 @@
-class scoreboard extends uvm_scoreboard;
-	`uvm_component_utils(scoreboard)
-	uvm_tlm_analysis_fifo#(trans) inp_mon_fifo;
-	uvm_tlm_analysis_fifo#(trans) out_mon_fifo;
-	trans inp_mon;
-	trans out_mon;
-	logic [31:0] ref_mem [bit [15:0]];
-	logic [1:0]exp_bresp, exp_rresp;
-	logic [31:0]exp_data;
-	logic [31:0]prev_data;
-	int pass, fail;
-	function new(string name="scoreboard",uvm_component parent);
+class driver extends uvm_driver#(trans);
+	`uvm_component_utils(driver)
+	virtual axi4lite_if.drv_mp vif;
+	axi4lite_config m_cfg;
+	trans data2duv;
+	function new(string name="driver", uvm_component parent);
 		super.new(name,parent);
-		inp_mon_fifo=new("inp_mon_fifo",this);
-		out_mon_fifo=new("out_mon_fifo",this);
 	endfunction
-
 	function void build_phase(uvm_phase phase);
 		super.build_phase(phase);
-		inp_mon=trans::type_id::create("inp_mon");
-		out_mon=trans::type_id::create("out_mon");
-		pass=0;
-		fail=0;
+		if(!uvm_config_db#(axi4lite_config)::get(this,"","axi4lite_config",m_cfg))
+			`uvm_fatal(get_type_name(),"Driver Failed");
 	endfunction
-
-	task reset_ref_model();
-		begin
-			for(int i=0;i<16;i++) begin
-			ref_mem[i]=32'h0;
-
-			end
-			exp_bresp=0;
-			exp_rresp=0;
-			exp_data=0;
-			prev_data=0;
-			//pass=0;
-			//fail=0;
-		end
-	endtask
-
+	function void connect_phase(uvm_phase phase);
+		super.connect_phase(phase);
+		vif=m_cfg.vif;
+	endfunction
 	task run_phase(uvm_phase phase);
-		reset_ref_model();
+		vif.drv_cb.AWVALID<=0;
+		vif.drv_cb.WVALID<=0;
+		vif.drv_cb.ARVALID<=0;
+		vif.drv_cb.RREADY<=0;
+		vif.drv_cb.BREADY<=0;
+
 		forever begin
-			`uvm_info("SB Check","Waiting for input",UVM_NONE)
-			inp_mon_fifo.get(inp_mon);
-			`uvm_info("SB Check","Got input",UVM_NONE)
-			out_mon_fifo.get(out_mon);
-			`uvm_info("SB Check","Output received",UVM_NONE)
-			ref_model(inp_mon);
-			`uvm_info("SB Check","Ref model done",UVM_NONE)
-			compare_output();
-			`uvm_info("SB Check","Comparisone done",UVM_NONE)
+			`uvm_info("Driver_check","Before get next item",UVM_NONE)
+			seq_item_port.get_next_item(req);
+			`uvm_info("Driver_check","After get next item",UVM_NONE)
+			if(req.write_read)begin
+				case(req.write_order)
+				3'd0: begin
+					`uvm_info("Driver_check","before write address handshake",UVM_NONE)
+					drive_write_address(req);
+					`uvm_info("Driver_check","after write address handshake",UVM_NONE)
+					drive_write_data(req);
+					`uvm_info("Driver_check","after write data handshake",UVM_NONE)
+				end
+
+				3'd1: begin
+					drive_write_data(req);
+					drive_write_address(req);
+				end
+				3'd2: begin
+					if(req.alt==0) begin
+						drive_write_data(req);
+						@(vif.drv_cb);
+						drive_write_address(req);
+						req.alt=1;
+				end
+					else begin
+						drive_write_address(req);
+						@(vif.drv_cb);
+						drive_write_data(req);
+						req.alt=0;
+					end
+
+				end
+				3'd3: begin
+ 					fork
+						drive_write_address(req,1);
+						drive_write_data(req,1);
+					join
+				end
+				3'd4: begin
+					`uvm_info("Driver","Simultaneous write and read",UVM_NONE)
+					while(!(vif.drv_cb.AWREADY && vif.drv_cb.WREADY && vif.drv_cb.ARREADY)) begin
+						$display("%0t Waiting for READY:AWREADY=%0d WREADY=%0d ARREADY=%0d",$time,vif.drv_cb.AWREADY,
+						vif.drv_cb.WREADY,vif.drv_cb.ARREADY);
+						@(vif.drv_cb);
+					end
+					vif.drv_cb.AWADDR<=req.AWADDR;
+					vif.drv_cb.WDATA<=req.WDATA;
+					vif.drv_cb.WSTRB<=req.WSTRB;
+					vif.drv_cb.ARADDR<=req.ARADDR;
+					vif.drv_cb.AWVALID<=1;
+					vif.drv_cb.WVALID<=1;
+					vif.drv_cb.ARVALID<=1;
+					@(vif.drv_cb);
+					`uvm_info("Driver","all high",UVM_NONE)
+					@(vif.drv_cb);
+					if(vif.drv_cb.AWREADY && vif.drv_cb.WREADY && vif.drv_cb.ARREADY) begin
+						`uvm_info("Driver","All handshake occured",UVM_NONE)
+					end
+					else begin
+						`uvm_error("Driver","Simultaneous handshake failed")
+					end
+					vif.drv_cb.AWVALID<=0;
+					vif.drv_cb.WVALID<=0;
+					vif.drv_cb.ARVALID<=0;
+					fork begin					
+						`uvm_info("Driver","Waiting for BVALID",UVM_NONE)
+						wait(vif.drv_cb.BVALID);
+						`uvm_info("Driver","BVALID detected",UVM_NONE)
+						vif.drv_cb.BREADY<=1;
+						`uvm_info("Driver",$sformatf("AFTER BREADY: BVALID=%0d",vif.drv_cb.BVALID),UVM_NONE)
+						repeat(2) @(vif.drv_cb);
+						vif.drv_cb.BREADY<=0;
+						`uvm_info("Driver","B response handshake completed", UVM_NONE)
+					end
+					begin
+						`uvm_info("Driver","Waiting for RVALID",UVM_NONE)
+						wait(vif.drv_cb.RVALID);
+						`uvm_info("Driver","RVALID detected",UVM_NONE)
+						vif.drv_cb.RREADY<=1;
+						@(vif.drv_cb);
+						vif.drv_cb.RREADY<=0;
+						`uvm_info("Driver","R response handshake completed",UVM_NONE)
+        				end
+					join
+					//@(vif.drv_cb);
+					`uvm_info("Sim Driver","Completed",UVM_NONE)
+				end
+				endcase
+				if(req.write_order!=3'd4) begin
+					`uvm_info("Driver_check","before waiting for response",UVM_NONE)
+					//vif.drv_cb.BREADY<=1;
+					wait(vif.drv_cb.BVALID);
+					`uvm_info("Driver_check","BVALID detected",UVM_NONE)
+					@(vif.drv_cb);
+					`uvm_info("Driver_check","after one cycle asserting BREADY",UVM_NONE)
+					vif.drv_cb.BREADY<=1;
+					@(vif.drv_cb);
+					`uvm_info("Driver_check","BREADY handshake done",UVM_NONE)
+					vif.drv_cb.BREADY<=0;
+					`uvm_info("Driver_check","got response ",UVM_NONE)
+				end
+			end
+
+			else begin
+				`uvm_info("Driver check","Read transaction received ",UVM_NONE);
+ 				drive_read(req);
+				//vif.drv_cb.RREADY<=1;
+				forever begin
+					@(vif.drv_cb);
+
+					if(vif.drv_cb.RVALID) break;
+				end
+				vif.drv_cb.RREADY<=1;
+				@(vif.drv_cb);
+				vif.drv_cb.RREADY<=0;
+			end
+			`uvm_info("INPUT_DRIVER",$sformatf("Input Driver\n%s",req.sprint()),UVM_NONE);
+			seq_item_port.item_done();
 		end
 	endtask
-
-	virtual task ref_model(trans t);
-		if(!t.ARESETn) begin
-			reset_ref_model();
-			return;
-		end
-
-		if(t.write_read) begin
-			if (t.write_order==3'd4) begin
-				if(t.ARADDR>32'h3C) exp_rresp=2'b11;
-				else if(t.ARADDR[1:0]!=2'b00) exp_rresp=2'b10;
-				else if(t.ARADDR>=32'h34 && t.ARADDR <=32'h38) exp_rresp=2'b10;
-				else if((t.ARADDR>=32'h00 && t.ARADDR<=32'h24) || (t.ARADDR>=32'h28 && t.ARADDR <=32'h30) || t.ARADDR==32'h3C) begin
-					exp_rresp=2'b00;
-					if(t.ARADDR==t.AWADDR)
-						exp_data=prev_data;
-					else 
-						exp_data=ref_mem[t.ARADDR[5:2]];
-				end
-				else exp_rresp=2'b11;
-		 		if(t.AWADDR>32'h3C) exp_bresp=2'b11;
-                		else if(t.AWADDR[1:0]!=2'b00) exp_bresp=2'b10;
-                		else if((t.AWADDR>=32'h00 && t.AWADDR<=32'h24) || (t.AWADDR>=32'h34 && t.AWADDR <=32'h38) || t.AWADDR==32'h3C) begin
-                        		exp_bresp=2'b00;
-					prev_data=ref_mem[t.AWADDR[5:2]];
-                        		if(t.WSTRB[0]) ref_mem[t.AWADDR[5:2]][7:0]=t.WDATA[7:0];
-					if(t.WSTRB[1]) ref_mem[t.AWADDR[5:2]][15:8]=t.WDATA[15:8];
-					if(t.WSTRB[2]) ref_mem[t.AWADDR[5:2]][23:16]=t.WDATA[23:16];
-					if(t.WSTRB[3]) ref_mem[t.AWADDR[5:2]][31:24]=t.WDATA[31:24];
-
-               			end
-                		else if(t.AWADDR>=32'h28 && t.AWADDR<=32'h30) exp_bresp=2'b10;
-                		else exp_bresp=2'b11;
-			end
-			else begin
-				if(t.AWADDR>32'h3C) exp_bresp=2'b11;
-				else if(t.AWADDR[1:0]!=2'b00) exp_bresp=2'b10;
-				else if((t.AWADDR>=32'h00 && t.AWADDR<=32'h24) || (t.AWADDR>=32'h34 && t.AWADDR <=32'h38) || t.AWADDR==32'h3C) begin
-					exp_bresp=2'b00;
-					ref_mem[t.AWADDR[5:2]]=t.WDATA;
-				end
-				else if(t.AWADDR>=32'h28 && t.AWADDR<=32'h30) exp_bresp=2'b10;
-				else exp_bresp=2'b11;
-			end
-		end
-		else begin
-			if(t.ARADDR>32'h3C) exp_rresp=2'b11;
-			else if(t.ARADDR[1:0]!=2'b00) exp_rresp=2'b10;
-			else if(t.ARADDR>=32'h34 && t.ARADDR <=32'h38) exp_rresp=2'b10;
-			else if((t.ARADDR>=32'h00 && t.ARADDR<=32'h24) || (t.ARADDR>=32'h28 && t.ARADDR <=32'h30) || t.ARADDR==32'h3C) begin
-				exp_rresp=2'b00;
-				exp_data=ref_mem[t.ARADDR[5:2]];
-			end
-			else exp_rresp=2'b11;
-		end
+	task drive_write_address(trans data2duv, bit hold=0);
+	begin
+		@(vif.drv_cb);
+		vif.drv_cb.AWADDR<=data2duv.AWADDR;
+		vif.drv_cb.AWPROT<=data2duv.AWPROT;
+		$display("%0t Driver: AWVALID<=1",$time);
+		vif.drv_cb.AWVALID<=1;
+		@(vif.drv_cb)
+		while(!vif.drv_cb.AWREADY) @vif.drv_cb;
+		if(hold) @(vif.drv_cb);
+		$display("[%0t] Driver:AWREADY seen, AWVALID<=0",$time);
+		vif.drv_cb.AWVALID<=0;
+	end
 	endtask
 
-	virtual task compare_output();
-
-		if(inp_mon.write_read) begin
-			if(inp_mon.write_order==3'd4) begin
-				if(out_mon.BRESP==exp_bresp) begin
-					pass++;
-					`uvm_info(get_type_name,$sformatf("write response correct exp=%b act=%b",exp_bresp, out_mon.BRESP), UVM_NONE);
-				end
-				else if(out_mon.BRESP != exp_bresp) begin
-					fail++;
-					`uvm_error(get_type_name,$sformatf("write response error exp=%b act=%b",exp_bresp, out_mon.BRESP));
-				end
-				if(out_mon.RRESP== exp_rresp && out_mon.RDATA == exp_data) begin
-					pass++;
-					`uvm_info(get_type_name,$sformatf("read response and data correct exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA), UVM_NONE);
-				end
-				else if( out_mon.RRESP!= exp_rresp && out_mon.RDATA == exp_data) begin
-					fail++;
-					`uvm_error(get_type_name,$sformatf("read response error exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA));
-				end
-				else if( out_mon.RRESP== exp_rresp && out_mon.RDATA != exp_data) begin
-					fail++;
-					`uvm_error(get_type_name,$sformatf("read data error exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA));
-				end
-				else if(out_mon.RRESP!=exp_rresp && out_mon.RDATA!=exp_data) begin
-					fail++;
-					`uvm_error(get_type_name,$sformatf("read response and data error exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA));
-				end
-		
-			end
-			else begin
-				if(out_mon.BRESP==exp_bresp) begin
-					pass++;
-					`uvm_info(get_type_name,$sformatf("write response correct exp=%b act=%b",exp_bresp, out_mon.BRESP), UVM_NONE);
-				end
-				else begin
-					fail++;
-					`uvm_error(get_type_name,$sformatf("write response error exp=%b act=%b",exp_bresp, out_mon.BRESP));
-				end
-			end	
-		end
-		else begin
-			if(out_mon.RRESP== exp_rresp && out_mon.RDATA == exp_data) begin
-				pass++;
-				`uvm_info(get_type_name,$sformatf("read response and data correct exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA), UVM_NONE);
-			end
-			else if( out_mon.RRESP!= exp_rresp && out_mon.RDATA == exp_data) begin
-				fail++;
-				`uvm_error(get_type_name,$sformatf("read response error exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA));
-			end
-			else if( out_mon.RRESP== exp_rresp && out_mon.RDATA != exp_data) begin
-				fail++;
-				`uvm_error(get_type_name,$sformatf("read data error exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA));
-			end
-			else begin
-				fail++;
-				`uvm_error(get_type_name,$sformatf("read response and data error exp=%b act=%b exp_data=%d act=%d",exp_rresp, out_mon.RRESP, exp_data, out_mon.RDATA));
-			end
-		end
+	task drive_write_data(trans data2duv, bit hold=0);
+	begin
+		@(vif.drv_cb);
+		vif.drv_cb.WDATA<=data2duv.WDATA;
+		vif.drv_cb.WSTRB<=data2duv.WSTRB;
+		vif.drv_cb.WVALID<=1;
+		@(vif.drv_cb)
+		while(!vif.drv_cb.WREADY) @(vif.drv_cb);
+		if(hold) @(vif.drv_cb);
+		vif.drv_cb.WVALID<=0;
+	end
 	endtask
 
-	function void report_phase(uvm_phase phase);
-		super.report_phase(phase);
-		`uvm_info(get_type_name(),$sformatf("\n Passed Tests: %0d\n Failed Tests: %0d\n",pass,fail),UVM_NONE);
-	endfunction
+	task drive_read(trans data2duv);
+	begin
+		@(vif.drv_cb);
+		vif.drv_cb.ARADDR<=data2duv.ARADDR;
+		vif.drv_cb.ARPROT<=data2duv.ARPROT;
+		vif.drv_cb.ARVALID<=1;
+		begin
+			@(vif.drv_cb);
+			while(!vif.drv_cb.ARREADY) @(vif.drv_cb);
+		end
+		vif.drv_cb.ARVALID<=0;
+	end
+	endtask
 endclass
-
-
-
-
