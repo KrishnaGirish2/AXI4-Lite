@@ -77,7 +77,7 @@ class scoreboard extends uvm_scoreboard;
                 		else if((t.AWADDR>=32'h00 && t.AWADDR<=32'h24) || (t.AWADDR>=32'h34 && t.AWADDR <=32'h38) || t.AWADDR==32'h3C) begin
                         		exp_bresp=2'b00;
 					prev_data=ref_mem[t.AWADDR[5:2]];
-                        		if(t.WSTRB[0]) ref_mem[t.AWADDR[5:2]][7:0]=t.WDATA[7:0];
+                    if(t.WSTRB[0]) ref_mem[t.AWADDR[5:2]][7:0]=t.WDATA[7:0];
 					if(t.WSTRB[1]) ref_mem[t.AWADDR[5:2]][15:8]=t.WDATA[15:8];
 					if(t.WSTRB[2]) ref_mem[t.AWADDR[5:2]][23:16]=t.WDATA[23:16];
 					if(t.WSTRB[3]) ref_mem[t.AWADDR[5:2]][31:24]=t.WDATA[31:24];
@@ -91,7 +91,10 @@ class scoreboard extends uvm_scoreboard;
 				else if(t.AWADDR[1:0]!=2'b00) exp_bresp=2'b10;
 				else if((t.AWADDR>=32'h00 && t.AWADDR<=32'h24) || (t.AWADDR>=32'h34 && t.AWADDR <=32'h38) || t.AWADDR==32'h3C) begin
 					exp_bresp=2'b00;
-					ref_mem[t.AWADDR[5:2]]=t.WDATA;
+					if(t.WSTRB[0]) ref_mem[t.AWADDR[5:2]][7:0]=t.WDATA[7:0];
+					if(t.WSTRB[1]) ref_mem[t.AWADDR[5:2]][15:8]=t.WDATA[15:8];
+					if(t.WSTRB[2]) ref_mem[t.AWADDR[5:2]][23:16]=t.WDATA[23:16];
+					if(t.WSTRB[3]) ref_mem[t.AWADDR[5:2]][31:24]=t.WDATA[31:24];
 				end
 				else if(t.AWADDR>=32'h28 && t.AWADDR<=32'h30) exp_bresp=2'b10;
 				else exp_bresp=2'b11;
